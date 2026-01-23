@@ -1,0 +1,23 @@
+{
+  "name": "combined-relay",
+  "version": "1.0.0",
+  "description": "A combined nostr and GUN relay",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
+  "keywords": [
+    "nostr",
+    "gun",
+    "relay",
+    "p2p",
+    "decentralized"
+  ],
+  "author": "Daniel Raeder",
+  "license": "MIT",
+  "dependencies": {
+    "gun": "^0.2020.1240",
+    "express": "^4.18.2"
+  }
+}

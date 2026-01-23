@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Combined Relay - Status</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            opacity: 0.8;
+            margin-bottom: 30px;
+        }
+        .status-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 30px 0;
+        }
+        .status-card {
+            background: rgba(255, 255, 255, 0.15);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .status-card h3 {
+            margin-top: 0;
+            font-size: 1.2em;
+        }
+        .status-indicator {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-left: 10px;
+        }
+        .status-online {
+            background-color: #4ade80;
+            box-shadow: 0 0 10px #4ade80;
+        }
+        .connection-info {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            text-align: left;
+        }
+        .connection-info code {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+        .info-section {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        a {
+            color: #60a5fa;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        @media (max-width: 600px) {
+            .status-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔗 Combined Relay</h1>
+        <p class="subtitle">Nostr + GUN Relay Server</p>
+        
+        <div class="status-grid">
+            <div class="status-card">
+                <h3>GUN Relay <span class="status-indicator status-online" id="gun-status"></span></h3>
+                <div class="connection-info">
+                    <strong>Status:</strong> <span id="gun-text">Online</span><br>
+                    <strong>Protocol:</strong> P2P Graph Database<br>
+                    <strong>Port:</strong> 8765
+                </div>
+            </div>
+            
+            <div class="status-card">
+                <h3>Nostr Relay</h3>
+                <div class="connection-info">
+                    <strong>Status:</strong> Check Docker<br>
+                    <strong>Protocol:</strong> Nostr (strfry)<br>
+                    <strong>Port:</strong> 7777
+                </div>
+            </div>
+        </div>
+
+        <div class="info-section">
+            <h3>📡 Connection Information</h3>
+            
+            <div class="connection-info">
+                <strong>GUN Relay:</strong><br>
+                Connect at: <code>http://localhost:8765/gun</code>
+            </div>
+            
+            <div class="connection-info">
+                <strong>Nostr Relay:</strong><br>
+                WebSocket: <code>ws://localhost:7777</code>
+            </div>
+        </div>
+
+        <div class="info-section">
+            <h3>📚 Resources</h3>
+            <ul>
+                <li><a href="https://github.com/hoytech/strfry" target="_blank">strfry (Nostr Relay)</a></li>
+                <li><a href="https://gun.eco/" target="_blank">GUN Database</a></li>
+                <li><a href="https://github.com/nostr-protocol/nostr" target="_blank">Nostr Protocol</a></li>
+            </ul>
+        </div>
+    </div>
+
+    <script src="/gun/gun.js"></script>
+    <script>
+        // Test GUN connection using current host
+        try {
+            const host = window.location.host || 'localhost:8765';
+            const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+            const gunUrl = `${protocol}//${host}/gun`;
+            
+            const gun = Gun([gunUrl]);
+            document.getElementById('gun-text').textContent = 'Online';
+            document.getElementById('gun-status').className = 'status-indicator status-online';
+        } catch (e) {
+            document.getElementById('gun-text').textContent = 'Offline';
+            document.getElementById('gun-status').className = 'status-indicator';
+            document.getElementById('gun-status').style.backgroundColor = '#ef4444';
+        }
+    </script>
+</body>
+</html>

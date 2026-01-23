@@ -1,0 +1,12 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+README.md
+SETUP.md
+*.md
+.env
+.env.*
+!.env.example
+strfry-db
+strfry
