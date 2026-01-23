@@ -13,8 +13,8 @@ const server = app.listen(PORT, () => {
   console.log(`Access the relay at: http://localhost:${PORT}/gun`);
 });
 
-// Attach Gun to the server
-Gun({ web: server });
+// Initialize Gun with the Express server
+const gun = Gun({ web: server });
 
 console.log('Combined relay started:');
 console.log('- GUN relay is running on this process');

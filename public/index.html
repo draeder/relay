@@ -139,9 +139,13 @@
 
     <script src="/gun/gun.js"></script>
     <script>
-        // Test GUN connection
+        // Test GUN connection using current host
         try {
-            const gun = Gun(['http://localhost:8765/gun']);
+            const host = window.location.host || 'localhost:8765';
+            const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+            const gunUrl = `${protocol}//${host}/gun`;
+            
+            const gun = Gun([gunUrl]);
             document.getElementById('gun-text').textContent = 'Online';
             document.getElementById('gun-status').className = 'status-indicator status-online';
         } catch (e) {
