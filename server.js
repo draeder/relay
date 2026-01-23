@@ -169,7 +169,7 @@ function createServer(options = {}) {
     }
   };
 
-  const wss = new WebSocketServer({ noServer: true });
+  const wss = new WebSocketServer({ noServer: true, perMessageDeflate: false });
 
   wss.on('connection', (ws) => {
     ws.on('message', async (data) => {
