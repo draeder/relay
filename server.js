@@ -171,6 +171,10 @@ function createServer(options = {}) {
 
   const wss = new WebSocketServer({ noServer: true, perMessageDeflate: false });
 
+  // Capture existing upgrade listeners (e.g., GUN) so we can route upgrades explicitly
+  const passthroughUpgradeHandlers = server.listeners('upgrade');
+  passthroughUpgradeHandlers.forEach((handler) => server.removeListener('upgrade', handler));
+
   wss.on('connection', (ws) => {
     ws.on('message', async (data) => {
       let payload;
@@ -209,12 +213,16 @@ function createServer(options = {}) {
     });
   });
 
-  server.prependListener('upgrade', (req, socket, head) => {
+  server.on('upgrade', (req, socket, head) => {
     if (enableLogging) {
       console.log('upgrade request', req.url, 'ua:', req.headers['user-agent'] || 'n/a');
     }
     if (req.url !== '/nostr') {
-      return; // let other upgrade listeners (e.g., GUN) handle
+      // Delegate non-nostr upgrades (e.g., GUN) to their original handlers
+      for (const handler of passthroughUpgradeHandlers) {
+        handler.call(server, req, socket, head);
+      }
+      return;
     }
     wss.handleUpgrade(req, socket, head, (ws) => {
       if (enableLogging) {
