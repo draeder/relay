@@ -209,20 +209,19 @@ function createServer(options = {}) {
     });
   });
 
-  server.on('upgrade', (req, socket, head) => {
+  server.prependListener('upgrade', (req, socket, head) => {
     if (enableLogging) {
       console.log('upgrade request', req.url, 'ua:', req.headers['user-agent'] || 'n/a');
     }
-    if (req.url === '/nostr') {
-      wss.handleUpgrade(req, socket, head, (ws) => {
-        if (enableLogging) {
-          console.log('nostr websocket upgraded');
-        }
-        wss.emit('connection', ws, req);
-      });
-    } else {
-      socket.destroy();
+    if (req.url !== '/nostr') {
+      return; // let other upgrade listeners (e.g., GUN) handle
     }
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      if (enableLogging) {
+        console.log('nostr websocket upgraded');
+      }
+      wss.emit('connection', ws, req);
+    });
   });
 
   if (enableLogging) {
