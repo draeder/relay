@@ -7,10 +7,36 @@ function createServer(options = {}) {
   const port = options.port || process.env.PORT || 8765;
   const enableLogging = options.log !== false;
   const skipGun = options.skipGun === true;
-  const nostrOptions = Object.assign({ disableSignature: false }, options.nostr || {});
+  const nostrOptions = Object.assign({ disableSignature: process.env.NOSTR_DISABLE_SIG === 'true' }, options.nostr || {});
   const gunOptions = Object.assign({}, options.gun, { web: undefined });
 
   const app = express();
+  
+  const nip11 = {
+    name: 'Peer Relay',
+    description: 'Node-based Nostr + GUN relay (in-memory Nostr)',
+    pubkey: '',
+    contact: '',
+    supported_nips: [1, 11],
+    software: 'combined-relay-node',
+    version: '1.0.0'
+  };
+  
+  app.get('/nostr', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.status(200).send(JSON.stringify(nip11));
+  });
+  
+  app.get('/', (req, res, next) => {
+    const accept = (req.headers['accept'] || '').toLowerCase();
+    if (accept.includes('application/nostr+json') || accept.includes('application/json')) {
+      res.setHeader('Content-Type', 'application/json');
+      res.status(200).send(JSON.stringify(nip11));
+    } else {
+      next();
+    }
+  });
+  
   app.use(express.static('public'));
 
   if (skipGun) {
