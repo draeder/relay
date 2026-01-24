@@ -217,7 +217,7 @@ function createServer(options = {}) {
     if (enableLogging) {
       console.log('upgrade request', req.url, 'ua:', req.headers['user-agent'] || 'n/a');
     }
-    if (req.url !== '/nostr') {
+    if (req.url !== '/nostr' && req.url !== '/' && req.url !== '') {
       // Delegate non-nostr upgrades (e.g., GUN) to their original handlers
       for (const handler of passthroughUpgradeHandlers) {
         handler.call(server, req, socket, head);
