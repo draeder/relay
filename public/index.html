@@ -118,12 +118,12 @@
             
             <div class="connection-info">
                 <strong>GUN Relay:</strong><br>
-                Connect at: <code>http://localhost:8765/gun</code>
+                Connect at: <code id="gun-url">(detecting...)</code>
             </div>
             
             <div class="connection-info">
                 <strong>Nostr Relay:</strong><br>
-                WebSocket: <code>ws://localhost:7777</code>
+                WebSocket: <code id="nostr-url">(detecting...)</code>
             </div>
         </div>
 
@@ -137,7 +137,7 @@
         </div>
     </div>
 
-    <script src="/gun/gun.js"></script>
+    <script src="/gun.js"></script>
     <script>
         // Test GUN connection using current host
         try {
@@ -148,6 +148,13 @@
             const gun = Gun([gunUrl]);
             document.getElementById('gun-text').textContent = 'Online';
             document.getElementById('gun-status').className = 'status-indicator status-online';
+            const gunUrlEl = document.getElementById('gun-url');
+            if (gunUrlEl) gunUrlEl.textContent = gunUrl;
+
+            const nostrScheme = protocol === 'https:' ? 'wss:' : 'ws:';
+            const nostrUrl = `${nostrScheme}//${host}/nostr`;
+            const nostrUrlEl = document.getElementById('nostr-url');
+            if (nostrUrlEl) nostrUrlEl.textContent = nostrUrl;
         } catch (e) {
             document.getElementById('gun-text').textContent = 'Offline';
             document.getElementById('gun-status').className = 'status-indicator';
