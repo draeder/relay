@@ -342,6 +342,11 @@ function createServer(options = {}) {
     }
   };
 
+  // Ensure nostr-tools can use WebSocket in Node environment
+  if (typeof globalThis.WebSocket === 'undefined') {
+    globalThis.WebSocket = WebSocket;
+  }
+
   const wss = new WebSocketServer({ noServer: true, perMessageDeflate: false });
 
   // Capture existing upgrade listeners (e.g., GUN) so we can route upgrades explicitly
