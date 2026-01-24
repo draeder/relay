@@ -197,7 +197,7 @@ function createServer(options = {}) {
     }
   };
 
-  const fulfillHistory = (ws, subId, filters, hasUpstreamBridge = false) => {
+  const fulfillHistory = (ws, subId, filters) => {
     const sent = new Set();
     filters.forEach((filter) => {
       let remaining = typeof filter.limit === 'number' ? filter.limit : Infinity;
@@ -210,14 +210,7 @@ function createServer(options = {}) {
         }
       }
     });
-    // If upstream bridging is active, wait 4s for remote events before EOSE
-    if (hasUpstreamBridge) {
-      setTimeout(() => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify(['EOSE', subId]));
-        }
-      }, 4000);
-    } else if (ws.readyState === WebSocket.OPEN) {
+    if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(['EOSE', subId]));
     }
   };
@@ -285,7 +278,7 @@ function createServer(options = {}) {
       return;
     }
     nostrState.subs.set(subId, { ws, filters });
-    fulfillHistory(ws, subId, filters, upstreamRelays.length > 0);
+    fulfillHistory(ws, subId, filters);
 
     // Bridge this subscription to upstream relays so remote events flow in
     if (upstreamRelays.length > 0) {
