@@ -324,6 +324,9 @@ function createServer(options = {}) {
   passthroughUpgradeHandlers.forEach((handler) => server.removeListener('upgrade', handler));
 
   wss.on('connection', (ws) => {
+    if (enableLogging) {
+      console.log('nostr connection open');
+    }
     ws.on('message', async (data) => {
       let payload;
       try {
@@ -337,6 +340,15 @@ function createServer(options = {}) {
 
       const type = payload[0];
       try {
+        if (enableLogging) {
+          if (type === 'REQ') {
+            console.log('REQ received', payload[1], JSON.stringify(payload.slice(2)));
+          } else if (type === 'EVENT') {
+            console.log('EVENT received', (payload[1] && payload[1].id) || 'no-id');
+          } else if (type === 'CLOSE') {
+            console.log('CLOSE received', payload[1]);
+          }
+        }
         if (type === 'EVENT') {
           await handleEventMessage(ws, payload);
         } else if (type === 'REQ') {
@@ -352,11 +364,20 @@ function createServer(options = {}) {
     });
 
     ws.on('close', () => {
+      if (enableLogging) {
+        console.log('nostr connection closed');
+      }
       // Drop any subscriptions owned by this socket
       for (const [id, sub] of nostrState.subs.entries()) {
         if (sub.ws === ws) {
           nostrState.subs.delete(id);
         }
+      }
+    });
+
+    ws.on('error', (err) => {
+      if (enableLogging) {
+        console.error('nostr websocket error', err && err.message ? err.message : err);
       }
     });
   });
