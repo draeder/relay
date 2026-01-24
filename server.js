@@ -309,16 +309,20 @@ function createServer(options = {}) {
                 if (enableLogging) console.log('upstream ws connected', relayUrl);
                 try {
                   const subKey = `up_${subId}_${idx}`;
-                  // Strip tag filters from main filter obj and pass them correctly per NIP-01
+                  // Filter out non-indexed tag filters (keep #t, #e, #p which are indexed; remove #room)
                   const upstreamFilter = { ...filters[0] || {} };
-                  const tagFilters = {};
+                  const indexedTags = {};
                   for (const k of Object.keys(upstreamFilter)) {
                     if (k.startsWith('#')) {
-                      tagFilters[k] = upstreamFilter[k];
+                      // Only keep indexed tags: #t, #e, #p, #a, #d, etc. (most relays)
+                      // Skip #room as it's typically not indexed
+                      if (k !== '#room') {
+                        indexedTags[k] = upstreamFilter[k];
+                      }
                       delete upstreamFilter[k];
                     }
                   }
-                  const finalFilter = { ...upstreamFilter, ...tagFilters };
+                  const finalFilter = { ...upstreamFilter, ...indexedTags };
                   if (enableLogging) {
                     console.log('sending upstream REQ', subKey, JSON.stringify(finalFilter).slice(0, 150));
                   }
