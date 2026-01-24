@@ -270,7 +270,6 @@ function createServer(options = {}) {
     // Bridge this subscription to upstream relays so remote events flow in
     if (upstreamRelays.length > 0) {
       try {
-        const pool = await getUpstreamPool();
         // Augment filters for common tag aliases (e.g., '#t' and '#room')
         filters = filters.map((f) => {
           const nf = { ...f };
@@ -283,35 +282,52 @@ function createServer(options = {}) {
             console.log('bridging upstream sub', subId, JSON.stringify(filters));
           } catch {}
         }
-        const onEvent = (event) => {
-            // Store once, then broadcast to matching local subscribers
-            if (enableLogging) {
+        // Manual upstream bridging via ws for Node reliability
+        const sockets = [];
+        upstreamRelays.forEach((relayUrl, idx) => {
+          try {
+            const rws = new WebSocket(relayUrl, { perMessageDeflate: false });
+            rws.on('open', () => {
               try {
-                console.log('upstream EVENT', event.id, 'tags:', JSON.stringify(event.tags || []));
-              } catch {}
-            }
-            if (!nostrState.events.find((e) => e.id === event.id)) {
-              nostrState.events.push(event);
-            }
-            for (const [sid, sub] of nostrState.subs.entries()) {
-              if (sub.ws.readyState !== WebSocket.OPEN) continue;
-              const shouldSend = sub.filters.some((f) => matchesFilter(event, f));
-              if (shouldSend) {
-                sendEventToSub(sub.ws, sid, event);
+                const subKey = `up_${subId}_${idx}`;
+                rws.send(JSON.stringify(['REQ', subKey, ...filters]));
+              } catch (err) {
+                if (enableLogging) console.error('upstream send error', err.message);
               }
-            }
-        };
-        let unsub;
-        try {
-          unsub = pool.subscribe(upstreamRelays, filters, onEvent);
-        } catch (e1) {
-          if (typeof pool.subscribeMany === 'function') {
-            unsub = pool.subscribeMany(upstreamRelays, filters, onEvent);
-          } else {
-            throw e1;
+            });
+            rws.on('message', (data) => {
+              let msg;
+              try { msg = JSON.parse(data.toString()); } catch { return; }
+              if (!Array.isArray(msg)) return;
+              if (msg[0] === 'EVENT' && msg[2] && typeof msg[2] === 'object') {
+                const event = msg[2];
+                if (enableLogging) {
+                  try { console.log('upstream EVENT', event.id, 'tags:', JSON.stringify(event.tags || [])); } catch {}
+                }
+                if (!nostrState.events.find((e) => e.id === event.id)) {
+                  nostrState.events.push(event);
+                }
+                for (const [sid, sub] of nostrState.subs.entries()) {
+                  if (sub.ws.readyState !== WebSocket.OPEN) continue;
+                  const shouldSend = sub.filters.some((f) => matchesFilter(event, f));
+                  if (shouldSend) {
+                    sendEventToSub(sub.ws, sid, event);
+                  }
+                }
+              }
+            });
+            rws.on('error', (err) => {
+              if (enableLogging) console.error('upstream ws error', relayUrl, err && err.message ? err.message : err);
+            });
+            rws.on('close', () => {
+              // No-op; will be cleaned up on local CLOSE
+            });
+            sockets.push(rws);
+          } catch (err) {
+            if (enableLogging) console.error('Error connecting upstream', relayUrl, err.message);
           }
-        }
-        nostrState.upstreamSubs.set(subId, unsub);
+        });
+        nostrState.upstreamSubs.set(subId, { sockets });
       } catch (err) {
         if (enableLogging) {
           console.error('Error bridging upstream subscription:', err.message);
