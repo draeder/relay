@@ -71,48 +71,37 @@ function createServer(options = {}) {
 
   const syncFromUpstream = async () => {
     if (upstreamRelays.length === 0) return;
-    for (const relayUrl of upstreamRelays) {
-      try {
-        const { Relay } = await import('nostr-tools');
-        const relay = new Relay(relayUrl);
-        await relay.connect();
-        if (enableLogging) {
-          console.log('Syncing from upstream relay:', relayUrl);
-        }
-        // Subscribe to recent events (last 1 day, limit 200)
-        const filter = { since: Math.floor(Date.now() / 1000) - 86400, limit: 200 };
-        const sub = relay.sub([filter]);
-        let syncCount = 0;
-        sub.on('event', (event) => {
-          const existing = nostrState.events.find((e) => e.id === event.id);
-          if (!existing) {
-            nostrState.events.push(event);
-            syncCount++;
-            // Broadcast to all subscribers
-            for (const [subId, sub] of nostrState.subs.entries()) {
-              if (sub.ws.readyState === WebSocket.OPEN) {
-                const shouldSend = sub.filters.some((f) => matchesFilter(event, f));
-                if (shouldSend) {
-                  sendEventToSub(sub.ws, subId, event);
-                }
+    try {
+      const { SimplePool } = await import('nostr-tools');
+      const pool = new SimplePool();
+      if (enableLogging) {
+        console.log('Syncing from upstream relays:', upstreamRelays);
+      }
+      // Subscribe to recent events (last 1 day, limit 200)
+      const filter = { since: Math.floor(Date.now() / 1000) - 86400, limit: 200 };
+      const events = await pool.querySync(upstreamRelays, [filter]);
+      if (enableLogging) {
+        console.log(`Synced ${events.length} events from upstream relays`);
+      }
+      for (const event of events) {
+        const existing = nostrState.events.find((e) => e.id === event.id);
+        if (!existing) {
+          nostrState.events.push(event);
+          // Broadcast to all subscribers
+          for (const [subId, sub] of nostrState.subs.entries()) {
+            if (sub.ws.readyState === WebSocket.OPEN) {
+              const shouldSend = sub.filters.some((f) => matchesFilter(event, f));
+              if (shouldSend) {
+                sendEventToSub(sub.ws, subId, event);
               }
             }
           }
-        });
-        sub.on('eose', () => {
-          if (enableLogging) {
-            console.log(`Synced ${syncCount} new events from ${relayUrl}`);
-          }
-          relay.close();
-        });
-        // Timeout after 30s to avoid stalling
-        setTimeout(() => {
-          relay.close();
-        }, 30000);
-      } catch (err) {
-        if (enableLogging) {
-          console.error('Error syncing from upstream relay:', relayUrl, err.message);
         }
+      }
+      pool.close(upstreamRelays);
+    } catch (err) {
+      if (enableLogging) {
+        console.error('Error syncing from upstream relays:', err.message);
       }
     }
   };
