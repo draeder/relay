@@ -135,6 +135,19 @@
                 <li><a href="https://github.com/nostr-protocol/nostr" target="_blank">Nostr Protocol</a></li>
             </ul>
         </div>
+
+        <div class="info-section">
+            <h3>📎 Copy-Paste Examples</h3>
+            <p>Use these snippets with your current domain to quickly test connectivity.</p>
+            <div class="connection-info">
+                <strong>GUN (browser JS):</strong>
+                <pre style="white-space:pre-wrap"><code id="example-gun">// will populate below</code></pre>
+            </div>
+            <div class="connection-info">
+                <strong>Nostr (WebSocket):</strong>
+                <pre style="white-space:pre-wrap"><code id="example-nostr">// will populate below</code></pre>
+            </div>
+        </div>
     </div>
 
     <script src="/gun.js"></script>
@@ -155,6 +168,31 @@
             const nostrUrl = `${nostrScheme}//${host}/nostr`;
             const nostrUrlEl = document.getElementById('nostr-url');
             if (nostrUrlEl) nostrUrlEl.textContent = nostrUrl;
+
+            const gunExample = [
+                `// Connect to GUN at your relay`,
+                `const gun = Gun({ peers: ['${gunUrl}'] });`,
+                `// Write & read a test key`,
+                `gun.get('demo').put({ hello: 'world' });`,
+                `gun.get('demo').once(data => console.log('demo:', data));`
+            ].join('\n');
+            const nostrExample = [
+                `// Subscribe to recent kind:1 events on your relay`,
+                `const ws = new WebSocket('${nostrUrl}', { perMessageDeflate: false });`,
+                `ws.onopen = () => {`,
+                `  const since = Math.floor(Date.now()/1000) - 3600;`,
+                `  ws.send(JSON.stringify(['REQ','sub-demo',{ kinds:[1], since, limit: 5 }]));`,
+                `};`,
+                `ws.onmessage = ev => {`,
+                `  const msg = JSON.parse(ev.data);`,
+                `  if (msg[0] === 'EVENT') console.log('EVENT', msg[2]);`,
+                `  if (msg[0] === 'EOSE') console.log('EOSE');`,
+                `};`
+            ].join('\n');
+            const gunExEl = document.getElementById('example-gun');
+            const nostrExEl = document.getElementById('example-nostr');
+            if (gunExEl) gunExEl.textContent = gunExample;
+            if (nostrExEl) nostrExEl.textContent = nostrExample;
         } catch (e) {
             document.getElementById('gun-text').textContent = 'Offline';
             document.getElementById('gun-status').className = 'status-indicator';
