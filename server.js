@@ -73,7 +73,8 @@ function createServer(options = {}) {
     if (upstreamRelays.length === 0) return;
     for (const relayUrl of upstreamRelays) {
       try {
-        const { relayInit } = await import('nostr-tools');
+        const nostrTools = await import('nostr-tools');
+        const relayInit = nostrTools.relayInit;
         const relay = relayInit(relayUrl);
         await relay.connect();
         if (enableLogging) {
