@@ -70,17 +70,13 @@ function createServer(options = {}) {
   };
 
   // --- Upstream relay sync ---
-  const defaultUpstreams = ['wss://nos.lol', 'wss://relay.primal.net', 'wss://relay.nostr.band'];
-  const upstreamEnabled = !(options.nostr && options.nostr.disableUpstream) && process.env.NODE_ENV !== 'test';
+  const upstreamEnabled = !!process.env.NOSTR_UPSTREAM_RELAYS && !(options.nostr && options.nostr.disableUpstream) && process.env.NODE_ENV !== 'test';
   const upstreamRelays = upstreamEnabled
     ? (process.env.NOSTR_UPSTREAM_RELAYS || '')
         .split(',')
         .map((r) => r.trim())
         .filter(Boolean)
     : [];
-  if (upstreamEnabled && upstreamRelays.length === 0) {
-    upstreamRelays.push(...defaultUpstreams);
-  }
   if (enableLogging && upstreamRelays.length > 0) {
     console.log('Syncing from upstream relays:', upstreamRelays);
   }
@@ -434,6 +430,20 @@ function createServer(options = {}) {
     if (enableLogging) {
       console.log('nostr connection open');
     }
+    ws.isAlive = true;
+    ws.on('pong', () => { ws.isAlive = true; });
+
+    const pingInterval = setInterval(() => {
+      if (ws.isAlive === false) {
+        ws.terminate();
+        return;
+      }
+      ws.isAlive = false;
+      try {
+        ws.ping();
+      } catch (_) {}
+    }, 30000);
+
     ws.on('message', async (data) => {
       let payload;
       try {
@@ -474,6 +484,7 @@ function createServer(options = {}) {
       if (enableLogging) {
         console.log('nostr connection closed');
       }
+      clearInterval(pingInterval);
       // Drop any subscriptions owned by this socket
       for (const [id, sub] of nostrState.subs.entries()) {
         if (sub.ws === ws) {
