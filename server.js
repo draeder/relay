@@ -318,6 +318,9 @@ function createServer(options = {}) {
                 let msg;
                 try { msg = JSON.parse(data.toString()); } catch { return; }
                 if (!Array.isArray(msg)) return;
+                if (enableLogging && msg[0] !== 'EOSE') {
+                  console.log('upstream msg', relayUrl, JSON.stringify(msg).slice(0, 100));
+                }
                 if (msg[0] === 'EVENT' && msg[2] && typeof msg[2] === 'object') {
                   const event = msg[2];
                   if (enableLogging) {
