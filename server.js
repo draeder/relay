@@ -493,16 +493,18 @@ function createServer(options = {}) {
     if (enableLogging) {
       console.log('upgrade request', req.url, 'ua:', req.headers['user-agent'] || 'n/a');
     }
-    if (req.url !== '/nostr' && req.url !== '/' && req.url !== '') {
-      // Delegate non-nostr upgrades (e.g., GUN) to their original handlers
+    const isGun = req.url && req.url.startsWith('/gun');
+    if (isGun) {
+      // Delegate GUN upgrades to original handlers
       for (const handler of passthroughUpgradeHandlers) {
         handler.call(server, req, socket, head);
       }
       return;
     }
+    // Treat all other websocket upgrades as Nostr (allows bare host wss://relay.peer.ooo)
     wss.handleUpgrade(req, socket, head, (ws) => {
       if (enableLogging) {
-        console.log('nostr websocket upgraded');
+        console.log('nostr websocket upgraded', req.url || '/');
       }
       wss.emit('connection', ws, req);
     });
