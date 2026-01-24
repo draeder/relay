@@ -276,6 +276,11 @@ function createServer(options = {}) {
           filters,
           (event) => {
             // Store once, then broadcast to matching local subscribers
+            if (enableLogging) {
+              try {
+                console.log('upstream EVENT', event.id, 'tags:', JSON.stringify(event.tags || []));
+              } catch {}
+            }
             if (!nostrState.events.find((e) => e.id === event.id)) {
               nostrState.events.push(event);
             }
