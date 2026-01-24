@@ -61,6 +61,7 @@ function createServer(options = {}) {
   const nostrState = {
     events: [],
     subs: new Map(),
+    upstreamSubs: new Map(),
   };
 
   // --- Upstream relay sync ---
@@ -115,6 +116,15 @@ function createServer(options = {}) {
       nostrToolsPromise = import('nostr-tools');
     }
     return nostrToolsPromise;
+  };
+
+  let upstreamPool;
+  const getUpstreamPool = async () => {
+    const { SimplePool } = await loadNostrTools();
+    if (!upstreamPool) {
+      upstreamPool = new SimplePool();
+    }
+    return upstreamPool;
   };
 
   const computeEventId = (event) => {
@@ -222,9 +232,22 @@ function createServer(options = {}) {
         sendEventToSub(sub.ws, subId, event);
       }
     }
+
+    // Publish upstream only if we require valid signatures
+    try {
+      if (upstreamRelays.length > 0 && !nostrOptions.disableSignature) {
+        const pool = await getUpstreamPool();
+        // Fire-and-forget publish; upstream may reject invalid events
+        pool.publish(upstreamRelays, event);
+      }
+    } catch (err) {
+      if (enableLogging) {
+        console.error('Error publishing to upstream relays:', err.message);
+      }
+    }
   };
 
-  const handleReqMessage = (ws, payload) => {
+  const handleReqMessage = async (ws, payload) => {
     const subId = payload[1];
     const filters = payload.slice(2).filter((f) => f && typeof f === 'object');
     if (!subId || !filters.length) {
@@ -232,12 +255,54 @@ function createServer(options = {}) {
     }
     nostrState.subs.set(subId, { ws, filters });
     fulfillHistory(ws, subId, filters);
+
+    // Bridge this subscription to upstream relays so remote events flow in
+    if (upstreamRelays.length > 0) {
+      try {
+        const pool = await getUpstreamPool();
+        const unsub = pool.subscribe(
+          upstreamRelays,
+          filters,
+          (event) => {
+            // Store once, then broadcast to matching local subscribers
+            if (!nostrState.events.find((e) => e.id === event.id)) {
+              nostrState.events.push(event);
+            }
+            for (const [sid, sub] of nostrState.subs.entries()) {
+              if (sub.ws.readyState !== WebSocket.OPEN) continue;
+              const shouldSend = sub.filters.some((f) => matchesFilter(event, f));
+              if (shouldSend) {
+                sendEventToSub(sub.ws, sid, event);
+              }
+            }
+          },
+          // Upstream EOSE: we already sent local EOSE; skip duplicating
+          () => {}
+        );
+        nostrState.upstreamSubs.set(subId, unsub);
+      } catch (err) {
+        if (enableLogging) {
+          console.error('Error bridging upstream subscription:', err.message);
+        }
+      }
+    }
   };
 
   const handleCloseMessage = (payload) => {
     const subId = payload[1];
     if (subId) {
       nostrState.subs.delete(subId);
+      const unsub = nostrState.upstreamSubs.get(subId);
+      if (unsub) {
+        try {
+          unsub();
+        } catch (err) {
+          if (enableLogging) {
+            console.error('Error unsubscribing upstream', err.message);
+          }
+        }
+        nostrState.upstreamSubs.delete(subId);
+      }
     }
   };
 
@@ -348,6 +413,11 @@ function createServer(options = {}) {
     shutdownGun();
     wss.clients.forEach((client) => client.close());
     wss.close(() => {
+      try {
+        if (upstreamPool && upstreamRelays.length > 0) {
+          upstreamPool.close(upstreamRelays);
+        }
+      } catch {}
       server.close((err) => {
         if (err) {
           reject(err);
