@@ -70,7 +70,17 @@ function createServer(options = {}) {
   };
 
   // --- Upstream relay sync ---
-  const upstreamRelays = (process.env.NOSTR_UPSTREAM_RELAYS || '').split(',').filter(r => r.trim()).map(r => r.trim());
+  const defaultUpstreams = ['wss://nos.lol', 'wss://relay.primal.net', 'wss://relay.nostr.band'];
+  const upstreamEnabled = !(options.nostr && options.nostr.disableUpstream) && process.env.NODE_ENV !== 'test';
+  const upstreamRelays = upstreamEnabled
+    ? (process.env.NOSTR_UPSTREAM_RELAYS || '')
+        .split(',')
+        .map((r) => r.trim())
+        .filter(Boolean)
+    : [];
+  if (upstreamEnabled && upstreamRelays.length === 0) {
+    upstreamRelays.push(...defaultUpstreams);
+  }
   if (enableLogging && upstreamRelays.length > 0) {
     console.log('Syncing from upstream relays:', upstreamRelays);
   }
