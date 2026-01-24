@@ -47,6 +47,11 @@ function createServer(options = {}) {
     app.use(Gun.serve);
   }
 
+  // Provide a simple handshake endpoint to avoid 404s in UI/tools
+  app.get('/gun', (req, res) => {
+    res.status(200).send('GUN relay is alive');
+  });
+
   const server = app.listen(port, () => {
     if (enableLogging) {
       console.log(`GUN relay server running on port ${port}`);
