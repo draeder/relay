@@ -73,23 +73,21 @@ function createServer(options = {}) {
     if (upstreamRelays.length === 0) return;
     for (const relayUrl of upstreamRelays) {
       try {
-        const nostrTools = await import('nostr-tools');
-        const relayInit = nostrTools.relayInit;
-        const relay = relayInit(relayUrl);
+        const { Relay } = await import('nostr-tools');
+        const relay = new Relay(relayUrl);
         await relay.connect();
         if (enableLogging) {
-          console.log('Connected to upstream relay:', relayUrl);
+          console.log('Syncing from upstream relay:', relayUrl);
         }
-        // Subscribe to recent events (last 1 day, limit 100)
-        const filter = { since: Math.floor(Date.now() / 1000) - 86400, limit: 100 };
+        // Subscribe to recent events (last 1 day, limit 200)
+        const filter = { since: Math.floor(Date.now() / 1000) - 86400, limit: 200 };
         const sub = relay.sub([filter]);
+        let syncCount = 0;
         sub.on('event', (event) => {
           const existing = nostrState.events.find((e) => e.id === event.id);
           if (!existing) {
             nostrState.events.push(event);
-            if (enableLogging && nostrState.events.length % 10 === 0) {
-              console.log(`Synced ${nostrState.events.length} events from upstream`);
-            }
+            syncCount++;
             // Broadcast to all subscribers
             for (const [subId, sub] of nostrState.subs.entries()) {
               if (sub.ws.readyState === WebSocket.OPEN) {
@@ -103,13 +101,17 @@ function createServer(options = {}) {
         });
         sub.on('eose', () => {
           if (enableLogging) {
-            console.log('Upstream sync complete:', relayUrl);
+            console.log(`Synced ${syncCount} new events from ${relayUrl}`);
           }
           relay.close();
         });
+        // Timeout after 30s to avoid stalling
+        setTimeout(() => {
+          relay.close();
+        }, 30000);
       } catch (err) {
         if (enableLogging) {
-          console.error('Error syncing from upstream relay:', relayUrl, err);
+          console.error('Error syncing from upstream relay:', relayUrl, err.message);
         }
       }
     }
