@@ -192,7 +192,7 @@ function createServer(options = {}) {
     }
   };
 
-  const fulfillHistory = (ws, subId, filters) => {
+  const fulfillHistory = (ws, subId, filters, hasUpstreamBridge = false) => {
     const sent = new Set();
     filters.forEach((filter) => {
       let remaining = typeof filter.limit === 'number' ? filter.limit : Infinity;
@@ -205,7 +205,14 @@ function createServer(options = {}) {
         }
       }
     });
-    if (ws.readyState === WebSocket.OPEN) {
+    // If upstream bridging is active, wait 4s for remote events before EOSE
+    if (hasUpstreamBridge) {
+      setTimeout(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify(['EOSE', subId]));
+        }
+      }, 4000);
+    } else if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(['EOSE', subId]));
     }
   };
@@ -265,7 +272,7 @@ function createServer(options = {}) {
       return;
     }
     nostrState.subs.set(subId, { ws, filters });
-    fulfillHistory(ws, subId, filters);
+    fulfillHistory(ws, subId, filters, upstreamRelays.length > 0);
 
     // Bridge this subscription to upstream relays so remote events flow in
     if (upstreamRelays.length > 0) {
@@ -287,7 +294,14 @@ function createServer(options = {}) {
         upstreamRelays.forEach((relayUrl, idx) => {
           try {
             const rws = new WebSocket(relayUrl, { perMessageDeflate: false });
+            const timeoutHandle = setTimeout(() => {
+              if (rws.readyState !== WebSocket.OPEN) {
+                if (enableLogging) console.error('upstream ws timeout', relayUrl);
+                rws.close();
+              }
+            }, 5000);
             rws.on('open', () => {
+              clearTimeout(timeoutHandle);
               try {
                 const subKey = `up_${subId}_${idx}`;
                 rws.send(JSON.stringify(['REQ', subKey, ...filters]));
@@ -320,7 +334,7 @@ function createServer(options = {}) {
               if (enableLogging) console.error('upstream ws error', relayUrl, err && err.message ? err.message : err);
             });
             rws.on('close', () => {
-              // No-op; will be cleaned up on local CLOSE
+              if (enableLogging) console.log('upstream ws closed', relayUrl);
             });
             sockets.push(rws);
           } catch (err) {
@@ -340,21 +354,19 @@ function createServer(options = {}) {
     const subId = payload[1];
     if (subId) {
       nostrState.subs.delete(subId);
-      const unsub = nostrState.upstreamSubs.get(subId);
-      if (unsub) {
+      const upstreamData = nostrState.upstreamSubs.get(subId);
+      if (upstreamData && upstreamData.sockets) {
         try {
-          if (typeof unsub === 'function') {
-            unsub();
-          } else if (unsub && typeof unsub.unsub === 'function') {
-            unsub.unsub();
-          }
+          upstreamData.sockets.forEach((socket) => {
+            if (socket && socket.close) socket.close();
+          });
         } catch (err) {
           if (enableLogging) {
-            console.error('Error unsubscribing upstream', err.message);
+            console.error('Error closing upstream sockets', err.message);
           }
         }
-        nostrState.upstreamSubs.delete(subId);
       }
+      nostrState.upstreamSubs.delete(subId);
     }
   };
 
