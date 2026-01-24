@@ -260,7 +260,7 @@ function createServer(options = {}) {
 
   const handleReqMessage = async (ws, payload) => {
     const subId = payload[1];
-    const filters = payload.slice(2).filter((f) => f && typeof f === 'object');
+    let filters = payload.slice(2).filter((f) => f && typeof f === 'object');
     if (!subId || !filters.length) {
       return;
     }
@@ -271,10 +271,19 @@ function createServer(options = {}) {
     if (upstreamRelays.length > 0) {
       try {
         const pool = await getUpstreamPool();
-        const unsub = pool.subscribe(
-          upstreamRelays,
-          filters,
-          (event) => {
+        // Augment filters for common tag aliases (e.g., '#t' and '#room')
+        filters = filters.map((f) => {
+          const nf = { ...f };
+          if (nf['#t'] && !nf['#room']) nf['#room'] = nf['#t'];
+          if (nf['#room'] && !nf['#t']) nf['#t'] = nf['#room'];
+          return nf;
+        });
+        if (enableLogging) {
+          try {
+            console.log('bridging upstream sub', subId, JSON.stringify(filters));
+          } catch {}
+        }
+        const onEvent = (event) => {
             // Store once, then broadcast to matching local subscribers
             if (enableLogging) {
               try {
@@ -291,10 +300,17 @@ function createServer(options = {}) {
                 sendEventToSub(sub.ws, sid, event);
               }
             }
-          },
-          // Upstream EOSE: we already sent local EOSE; skip duplicating
-          () => {}
-        );
+        };
+        let unsub;
+        try {
+          unsub = pool.subscribe(upstreamRelays, filters, onEvent);
+        } catch (e1) {
+          if (typeof pool.subscribeMany === 'function') {
+            unsub = pool.subscribeMany(upstreamRelays, filters, onEvent);
+          } else {
+            throw e1;
+          }
+        }
         nostrState.upstreamSubs.set(subId, unsub);
       } catch (err) {
         if (enableLogging) {
@@ -311,7 +327,11 @@ function createServer(options = {}) {
       const unsub = nostrState.upstreamSubs.get(subId);
       if (unsub) {
         try {
-          unsub();
+          if (typeof unsub === 'function') {
+            unsub();
+          } else if (unsub && typeof unsub.unsub === 'function') {
+            unsub.unsub();
+          }
         } catch (err) {
           if (enableLogging) {
             console.error('Error unsubscribing upstream', err.message);
