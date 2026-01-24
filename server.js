@@ -170,6 +170,17 @@ function createServer(options = {}) {
     if (filter.kinds && Array.isArray(filter.kinds) && filter.kinds.length) {
       if (!filter.kinds.includes(event.kind)) return false;
     }
+    // Tag filters: keys like '#e', '#p', '#d' must match event.tags
+    for (const key of Object.keys(filter)) {
+      if (key.startsWith('#')) {
+        const values = filter[key];
+        if (Array.isArray(values) && values.length) {
+          const tagKey = key.slice(1);
+          const hasMatch = (event.tags || []).some((t) => Array.isArray(t) && t[0] === tagKey && values.includes(t[1]));
+          if (!hasMatch) return false;
+        }
+      }
+    }
     if (filter.since && event.created_at < filter.since) return false;
     if (filter.until && event.created_at > filter.until) return false;
     return true;
