@@ -63,6 +63,60 @@ function createServer(options = {}) {
     subs: new Map(),
   };
 
+  // --- Upstream relay sync ---
+  const upstreamRelays = (process.env.NOSTR_UPSTREAM_RELAYS || '').split(',').filter(r => r.trim()).map(r => r.trim());
+  if (enableLogging && upstreamRelays.length > 0) {
+    console.log('Syncing from upstream relays:', upstreamRelays);
+  }
+
+  const syncFromUpstream = async () => {
+    if (upstreamRelays.length === 0) return;
+    for (const relayUrl of upstreamRelays) {
+      try {
+        const { relayInit } = await import('nostr-tools');
+        const relay = relayInit(relayUrl);
+        await relay.connect();
+        if (enableLogging) {
+          console.log('Connected to upstream relay:', relayUrl);
+        }
+        // Subscribe to recent events (last 1 day, limit 100)
+        const filter = { since: Math.floor(Date.now() / 1000) - 86400, limit: 100 };
+        const sub = relay.sub([filter]);
+        sub.on('event', (event) => {
+          const existing = nostrState.events.find((e) => e.id === event.id);
+          if (!existing) {
+            nostrState.events.push(event);
+            if (enableLogging && nostrState.events.length % 10 === 0) {
+              console.log(`Synced ${nostrState.events.length} events from upstream`);
+            }
+            // Broadcast to all subscribers
+            for (const [subId, sub] of nostrState.subs.entries()) {
+              if (sub.ws.readyState === WebSocket.OPEN) {
+                const shouldSend = sub.filters.some((f) => matchesFilter(event, f));
+                if (shouldSend) {
+                  sendEventToSub(sub.ws, subId, event);
+                }
+              }
+            }
+          }
+        });
+        sub.on('eose', () => {
+          if (enableLogging) {
+            console.log('Upstream sync complete:', relayUrl);
+          }
+          relay.close();
+        });
+      } catch (err) {
+        if (enableLogging) {
+          console.error('Error syncing from upstream relay:', relayUrl, err);
+        }
+      }
+    }
+  };
+
+  // Start syncing on server startup
+  setImmediate(() => syncFromUpstream());
+
   let nostrToolsPromise;
   const loadNostrTools = () => {
     if (!nostrToolsPromise) {
