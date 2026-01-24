@@ -251,17 +251,25 @@ function createServer(options = {}) {
       }
     }
 
-    // Publish upstream only if we require valid signatures
-    try {
-      if (upstreamRelays.length > 0 && !nostrOptions.disableSignature) {
-        const pool = await getUpstreamPool();
-        // Fire-and-forget publish; upstream may reject invalid events
-        pool.publish(upstreamRelays, event);
-      }
-    } catch (err) {
-      if (enableLogging) {
-        console.error('Error publishing to upstream relays:', err.message);
-      }
+    // Publish all accepted events upstream (unsigned events may be rejected by upstream, but we try)
+    if (upstreamRelays.length > 0) {
+      upstreamRelays.forEach((relayUrl) => {
+        try {
+          const rws = new WebSocket(relayUrl, { perMessageDeflate: false });
+          rws.on('open', () => {
+            try {
+              rws.send(JSON.stringify(['EVENT', event]));
+              if (enableLogging) console.log('published to', relayUrl, event.id.slice(0, 8));
+              setTimeout(() => rws.close(), 1000);
+            } catch (err) {
+              if (enableLogging) console.error('upstream publish error', err.message);
+            }
+          });
+          rws.on('error', () => {}); // Silent
+        } catch (err) {
+          if (enableLogging) console.error('Error creating publish socket:', err.message);
+        }
+      });
     }
   };
 
