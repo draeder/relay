@@ -292,54 +292,67 @@ function createServer(options = {}) {
         // Manual upstream bridging via ws for Node reliability
         const sockets = [];
         upstreamRelays.forEach((relayUrl, idx) => {
-          try {
-            const rws = new WebSocket(relayUrl, { perMessageDeflate: false });
-            const timeoutHandle = setTimeout(() => {
-              if (rws.readyState !== WebSocket.OPEN) {
-                if (enableLogging) console.error('upstream ws timeout', relayUrl);
-                rws.close();
-              }
-            }, 5000);
-            rws.on('open', () => {
-              clearTimeout(timeoutHandle);
-              try {
-                const subKey = `up_${subId}_${idx}`;
-                rws.send(JSON.stringify(['REQ', subKey, ...filters]));
-              } catch (err) {
-                if (enableLogging) console.error('upstream send error', err.message);
-              }
-            });
-            rws.on('message', (data) => {
-              let msg;
-              try { msg = JSON.parse(data.toString()); } catch { return; }
-              if (!Array.isArray(msg)) return;
-              if (msg[0] === 'EVENT' && msg[2] && typeof msg[2] === 'object') {
-                const event = msg[2];
-                if (enableLogging) {
-                  try { console.log('upstream EVENT', event.id, 'tags:', JSON.stringify(event.tags || [])); } catch {}
-                }
-                if (!nostrState.events.find((e) => e.id === event.id)) {
-                  nostrState.events.push(event);
-                }
-                for (const [sid, sub] of nostrState.subs.entries()) {
-                  if (sub.ws.readyState !== WebSocket.OPEN) continue;
-                  const shouldSend = sub.filters.some((f) => matchesFilter(event, f));
-                  if (shouldSend) {
-                    sendEventToSub(sub.ws, sid, event);
+          const connect = (attempt = 1) => {
+            try {
+              const rws = new WebSocket(relayUrl, { perMessageDeflate: false });
+              const timeoutHandle = setTimeout(() => {
+                if (rws.readyState !== WebSocket.OPEN) {
+                  if (enableLogging) console.error(`upstream ws timeout [${attempt}]`, relayUrl);
+                  rws.close();
+                  if (attempt < 2) {
+                    setTimeout(() => connect(attempt + 1), 1000 * attempt);
                   }
                 }
+              }, 5000);
+              rws.on('open', () => {
+                clearTimeout(timeoutHandle);
+                if (enableLogging) console.log('upstream ws connected', relayUrl);
+                try {
+                  const subKey = `up_${subId}_${idx}`;
+                  rws.send(JSON.stringify(['REQ', subKey, ...filters]));
+                } catch (err) {
+                  if (enableLogging) console.error('upstream send error', err.message);
+                }
+              });
+              rws.on('message', (data) => {
+                let msg;
+                try { msg = JSON.parse(data.toString()); } catch { return; }
+                if (!Array.isArray(msg)) return;
+                if (msg[0] === 'EVENT' && msg[2] && typeof msg[2] === 'object') {
+                  const event = msg[2];
+                  if (enableLogging) {
+                    try { console.log('upstream EVENT', event.id, 'tags:', JSON.stringify(event.tags || [])); } catch {}
+                  }
+                  if (!nostrState.events.find((e) => e.id === event.id)) {
+                    nostrState.events.push(event);
+                  }
+                  for (const [sid, sub] of nostrState.subs.entries()) {
+                    if (sub.ws.readyState !== WebSocket.OPEN) continue;
+                    const shouldSend = sub.filters.some((f) => matchesFilter(event, f));
+                    if (shouldSend) {
+                      sendEventToSub(sub.ws, sid, event);
+                    }
+                  }
+                }
+              });
+              rws.on('error', (err) => {
+                if (enableLogging) console.error(`upstream ws error [${attempt}]`, relayUrl, err && err.message ? err.message : err);
+                if (attempt < 2) {
+                  setTimeout(() => connect(attempt + 1), 1000 * attempt);
+                }
+              });
+              rws.on('close', () => {
+                if (enableLogging) console.log('upstream ws closed', relayUrl);
+              });
+              sockets.push(rws);
+            } catch (err) {
+              if (enableLogging) console.error('Error creating upstream ws', relayUrl, err.message);
+              if (attempt < 2) {
+                setTimeout(() => connect(attempt + 1), 1000 * attempt);
               }
-            });
-            rws.on('error', (err) => {
-              if (enableLogging) console.error('upstream ws error', relayUrl, err && err.message ? err.message : err);
-            });
-            rws.on('close', () => {
-              if (enableLogging) console.log('upstream ws closed', relayUrl);
-            });
-            sockets.push(rws);
-          } catch (err) {
-            if (enableLogging) console.error('Error connecting upstream', relayUrl, err.message);
-          }
+            }
+          };
+          connect();
         });
         nostrState.upstreamSubs.set(subId, { sockets });
       } catch (err) {
