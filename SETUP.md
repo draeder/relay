@@ -164,6 +164,21 @@ cd strfry
 ./strfry relay
 ```
 
+## Cloudflare Worker (Nostr at /)
+
+This project includes a minimal Nostr relay that runs on Cloudflare Workers using a Durable Object.
+
+### Deploy
+
+```bash
+cd worker
+wrangler deploy
+```
+
+### Environment Variables
+
+- `NOSTR_MAX_EVENTS` (optional): max events kept in DO storage (default 1000)
+
 ## Testing
 
 ### Test GUN Relay
