@@ -28,23 +28,20 @@ wrangler deploy
 
 The Worker will be deployed to: `https://relay-nostr-gun.draeder.workers.dev`
 
-**Custom Domain** (optional):
-1. In Cloudflare Dashboard: Workers > Routes
-2. Add route: `relay.peer.ooo/*` → `relay-nostr-gun`
-3. Requires domain in your Cloudflare account
+**Access via**: `relay.peer.ooo`
 
 ## Usage
 
 ### Nostr Relay
 
-**WebSocket Endpoint**: `wss://relay-nostr-gun.draeder.workers.dev/`
+**WebSocket Endpoint**: `wss://relay.peer.ooo/`
 
 Connect with any Nostr client:
 
 ```javascript
 import { relayInit } from 'nostr-tools';
 
-const relay = relayInit('wss://relay-nostr-gun.draeder.workers.dev/');
+const relay = relayInit('wss://relay.peer.ooo/');
 await relay.connect();
 
 // Subscribe to events
@@ -67,13 +64,13 @@ relay.publish(event);
 
 ### GUN Relay
 
-**WebSocket Endpoint**: `wss://relay-nostr-gun.draeder.workers.dev/gun`
+**WebSocket Endpoint**: `wss://relay.peer.ooo/gun`
 
 Connect with GUN clients:
 
 ```javascript
 const Gun = require('gun');
-const gun = Gun(['wss://relay-nostr-gun.draeder.workers.dev/gun']);
+const gun = Gun(['wss://relay.peer.ooo/gun']);
 
 // Store data
 gun.get('greeting').put({ message: 'Hello, GUN!' });
@@ -86,7 +83,7 @@ gun.get('greeting').on((data) => {
 
 ### Info Endpoint
 
-**HTTP GET** `https://relay-nostr-gun.draeder.workers.dev/`
+**HTTP GET** `https://relay.peer.ooo/`
 
 Returns NIP-11 relay metadata:
 
