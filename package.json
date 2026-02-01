@@ -1,6 +1,6 @@
 {
   "name": "relays",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "description": "A combined nostr and GUN relay",
   "main": "index.js",
   "scripts": {

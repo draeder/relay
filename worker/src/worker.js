@@ -1,3 +1,5 @@
+import { schnorr } from "@noble/secp256k1";
+
 const DEFAULT_MAX_EVENTS = 1000;
 
 export default {
@@ -119,7 +121,9 @@ export class NostrRelay {
     if (typeof e.created_at !== "number" || !Array.isArray(e.tags)) return "invalid created_at/tags";
     if (typeof e.content !== "string") return "invalid content";
     const id = await this.eventId(e);
-    return id !== e.id ? "invalid id hash" : null;
+    if (id !== e.id) return "invalid id hash";
+    const ok = await this.verifySignature(e.id, e.sig, e.pubkey);
+    return ok ? null : "invalid signature";
   }
 
   async eventId(e) {
@@ -129,6 +133,22 @@ export class NostrRelay {
     return Array.from(new Uint8Array(hash))
       .map((x) => x.toString(16).padStart(2, "0"))
       .join("");
+  }
+
+  async verifySignature(id, sig, pubkey) {
+    if (!this.isHex(id, 64) || !this.isHex(sig, 128) || !this.isHex(pubkey, 64)) {
+      return false;
+    }
+    try {
+      return await schnorr.verify(sig, id, pubkey);
+    } catch {
+      return false;
+    }
+  }
+
+  isHex(value, length) {
+    if (typeof value !== "string" || value.length !== length) return false;
+    return /^[0-9a-f]+$/i.test(value);
   }
 
   match(e, f) {
