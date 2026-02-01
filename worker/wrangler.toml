@@ -1,0 +1,14 @@
+name = "relay-nostr-gun"
+main = "src/worker.js"
+compatibility_date = "2026-01-31"
+
+[durable_objects]
+bindings = [
+  { name = "NOSTR_RELAY", class_name = "NostrRelay" },
+  { name = "GUN_RELAY", class_name = "GunRelay" }
+]
+
+[[migrations]]
+tag = "v3"
+new_classes = ["NostrRelay", "GunRelay"]
+deleted_classes = []

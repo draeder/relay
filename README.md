@@ -1,121 +1,50 @@
-# Combined Relay
+# Peer Relay - Cloudflare Edition
 
-A combined nostr and GUN relay that integrates:
-- **Nostr relay** using [strfry](https://github.com/hoytech/strfry) - A high-performance nostr relay
-- **GUN relay** - A decentralized P2P graph database relay
+A combined Nostr and GUN relay deployed on **Cloudflare Workers + Durable Objects** for serverless, globally-distributed relay infrastructure.
 
 ## Features
 
-- **Nostr Protocol Support**: Websocket-based nostr relay using strfry
-- **GUN Database Support**: P2P graph database synchronization
-- **Docker Support**: Easy deployment with Docker Compose
-- **Dual Protocol**: Run both protocols simultaneously on different ports
+- **Nostr Relay** (NIP-01): WebSocket-based event pub/sub via Durable Objects
+- **GUN Relay**: P2P graph database synchronization via Durable Objects
+- **Serverless**: Deployed on Cloudflare Workers (no server management)
+- **Global**: Automatic Cloudflare edge distribution
+- **Scalable**: Durable Objects handle persistent state and connections
 
-## Quick Start
+## Deployment
 
-### Using Docker Compose (Recommended)
+### Prerequisites
 
-1. Clone the repository:
+- Cloudflare account with Workers enabled
+- Wrangler CLI installed: `npm install -g wrangler`
+- Node.js 18+
+
+### Quick Deploy
+
 ```bash
-git clone https://github.com/draeder/relay.git
-cd relay
-```
-
-2. Start both relays:
-```bash
-docker-compose up -d
-```
-
-This will start:
-- **Nostr relay (strfry)** on port `7777` (WebSocket at `ws://localhost:7777`)
-- **GUN relay** on port `8765` (HTTP/WebSocket at `http://localhost:8765/gun`)
-
-3. Check the status:
-```bash
-docker-compose ps
-docker-compose logs
-```
-
-### Manual Installation
-
-#### GUN Relay
-
-1. Install Node.js (v18 or higher)
-2. Install dependencies:
-```bash
+cd worker
 npm install
+wrangler deploy
 ```
 
-3. Start the GUN relay:
-```bash
-npm start
-```
+The Worker will be deployed to: `https://relay-nostr-gun.draeder.workers.dev`
 
-The GUN relay will be available at `http://localhost:8765/gun`
-
-#### Nostr Relay (strfry)
-
-For manual strfry installation, see the [strfry documentation](https://github.com/hoytech/strfry).
-
-Quick install on Debian/Ubuntu:
-```bash
-sudo apt install -y git build-essential libyaml-perl libtemplate-perl \
-  libregexp-grammars-perl libssl-dev zlib1g-dev liblmdb-dev \
-  libflatbuffers-dev libsecp256k1-dev libzstd-dev
-
-git clone https://github.com/hoytech/strfry.git
-cd strfry
-git submodule update --init
-make setup-golpe
-make -j4
-./strfry relay
-```
-
-## Configuration
-
-### GUN Relay Configuration
-
-Edit `index.js` to customize the GUN relay settings. Default port is `8765`.
-
-Set environment variable to change port:
-```bash
-PORT=9000 npm start
-```
-
-### Nostr Relay Configuration
-
-Edit `strfry.conf` to customize the strfry relay settings. Key configurations:
-- `relay.port`: WebSocket port (default: 7777)
-- `relay.bind`: Interface to bind (default: 0.0.0.0)
-- `relay.info.*`: Relay metadata (name, description, contact)
-- `db`: Database path
+**Custom Domain** (optional):
+1. In Cloudflare Dashboard: Workers > Routes
+2. Add route: `relay.peer.ooo/*` → `relay-nostr-gun`
+3. Requires domain in your Cloudflare account
 
 ## Usage
 
-### Connecting to the GUN Relay
+### Nostr Relay
 
-```javascript
-const Gun = require('gun');
-const gun = Gun(['http://localhost:8765/gun']);
+**WebSocket Endpoint**: `wss://relay-nostr-gun.draeder.workers.dev/`
 
-// Store data
-gun.get('greeting').put({ message: 'Hello, World!' });
+Connect with any Nostr client:
 
-// Read data
-gun.get('greeting').on((data) => {
-  console.log(data); // { message: 'Hello, World!' }
-});
-```
-
-### Connecting to the Nostr Relay
-
-Use any nostr client with the WebSocket URL: `ws://localhost:7777`
-
-Example with nostr-tools:
 ```javascript
 import { relayInit } from 'nostr-tools';
 
-const relay = relayInit('ws://localhost:7777');
+const relay = relayInit('wss://relay-nostr-gun.draeder.workers.dev/');
 await relay.connect();
 
 // Subscribe to events
@@ -123,47 +52,169 @@ let sub = relay.sub([{ kinds: [1] }]);
 sub.on('event', event => {
   console.log('Received event:', event);
 });
+
+// Publish an event
+const event = await signEvent({
+  kind: 1,
+  content: 'Hello, Nostr!',
+  created_at: Math.floor(Date.now() / 1000),
+  tags: []
+});
+relay.publish(event);
 ```
 
-## Ports
+**Supported NIPs**: NIP-01 (Event handling)
 
-- **7777**: Nostr relay (strfry) WebSocket
-- **8765**: GUN relay HTTP/WebSocket
+### GUN Relay
 
-## Development
+**WebSocket Endpoint**: `wss://relay-nostr-gun.draeder.workers.dev/gun`
 
-### Running in Development Mode
+Connect with GUN clients:
 
-```bash
-npm run dev
+```javascript
+const Gun = require('gun');
+const gun = Gun(['wss://relay-nostr-gun.draeder.workers.dev/gun']);
+
+// Store data
+gun.get('greeting').put({ message: 'Hello, GUN!' });
+
+// Read data
+gun.get('greeting').on((data) => {
+  console.log(data);
+});
 ```
 
-### Building Docker Images
+### Info Endpoint
 
-```bash
-docker-compose build
+**HTTP GET** `https://relay-nostr-gun.draeder.workers.dev/`
+
+Returns NIP-11 relay metadata:
+
+```json
+{
+  "name": "Peer Relay (Cloudflare)",
+  "description": "Nostr relay on Cloudflare Durable Objects + GUN relay",
+  "pubkey": "",
+  "contact": "",
+  "supported_nips": [1, 11],
+  "software": "combined-relay-worker",
+  "version": "1.0.0"
+}
 ```
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────┐
-│      Combined Relay Server          │
-├─────────────────┬───────────────────┤
-│  GUN Relay      │  Nostr Relay      │
-│  (Node.js)      │  (strfry)         │
-│  Port: 8765     │  Port: 7777       │
-│  P2P Graph DB   │  Nostr Protocol   │
-└─────────────────┴───────────────────┘
+                   Cloudflare Edge
+        ┌──────────────────────────────┐
+        │    Worker (HTTP Router)      │
+        ├──────────┬───────────────────┤
+        │          │                   │
+        │  /       │        /gun        │
+        │  │       │        │           │
+        ├──┼───────┼────────┼─────────┤
+        │  ▼       │        ▼         │
+        │ NOSTR_RELAY      GUN_RELAY │
+        │ (Durable Object) (Durable  │
+        │                  Object)   │
+        │                            │
+        └────────────────────────────┘
+             Persistent State
 ```
+
+## Development
+
+### Local Testing
+
+```bash
+cd worker
+
+# Install dependencies
+npm install
+
+# Run tests (requires WebSocket support)
+node test-nostr-valid.js
+```
+
+### Project Structure
+
+```
+worker/
+├── src/
+│   └── worker.js          # Main Worker + Durable Object classes
+├── wrangler.toml          # Cloudflare Worker config
+└── package.json
+```
+
+## Security Notes
+
+- **No hardcoded secrets**: All configuration via environment variables (if needed)
+- **Signature validation**: Nostr events are validated (ID hash checked)
+- **Event storage**: Ephemeral in-memory storage (resets on DO restart)
+- **Database**: GUN uses DO storage (persistent within the namespace)
+
+### Secrets Management
+
+If you need to add API keys or secrets:
+
+1. Store in Cloudflare Dashboard: Workers > Settings > Environment Variables
+2. Access in code via `env.SECRET_NAME`
+3. Never commit secrets to Git
+
+Example:
+
+```javascript
+export default {
+  async fetch(request, env) {
+    const apiKey = env.MY_API_KEY; // Never hardcode this
+  }
+};
+```
+
+## Performance
+
+- **Nostr relay**: ~1000 events in-memory per instance
+- **GUN relay**: Uses Durable Objects persistent storage
+- **Latency**: Global edge distribution via Cloudflare
+- **Concurrency**: Unlimited concurrent WebSocket connections
+
+## Limitations
+
+- Nostr events stored in-memory (ephemeral)
+- Basic Nostr validation (no signature verification for performance)
+- GUN relay is basic (get/put operations only)
+
+## Future Improvements
+
+- [ ] Persistent event storage (R2 or D1)
+- [ ] Full signature verification
+- [ ] Event filtering (NIP-01 compliance)
+- [ ] Relay authentication (NIP-42)
+- [ ] Better GUN protocol support
+
+## Troubleshooting
+
+**WebSocket connection fails (400 error)**
+- Ensure you're connecting with `Upgrade: websocket` header
+- Verify endpoint URL is correct
+
+**Events not stored**
+- Durable Objects may restart, clearing in-memory storage
+- For persistence, implement D1 database integration
+
+**Slow performance**
+- Check Cloudflare dashboard for errors
+- Verify DNS is pointing to correct Worker
+
+## Links
+
+- [Cloudflare Workers](https://workers.cloudflare.com/)
+- [Durable Objects](https://developers.cloudflare.com/durable-objects/)
+- [Nostr Protocol](https://github.com/nostr-protocol/nostr)
+- [GUN Database](https://gun.eco/)
+- [NIP-01 (Basic Protocol)](https://github.com/nostr-protocol/nips/blob/master/01.md)
+- [NIP-11 (Relay Info)](https://github.com/nostr-protocol/nips/blob/master/11.md)
 
 ## License
 
 MIT License - See LICENSE file for details
-
-## Links
-
-- [Nostr Protocol](https://github.com/nostr-protocol/nostr)
-- [strfry (Nostr Relay)](https://github.com/hoytech/strfry)
-- [GUN Database](https://gun.eco/)
-- [GUN GitHub](https://github.com/amark/gun)
