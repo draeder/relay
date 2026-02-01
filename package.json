@@ -1,5 +1,5 @@
 {
-  "name": "relay",
+  "name": "relays",
   "version": "1.0.1",
   "description": "A combined nostr and GUN relay",
   "main": "index.js",
